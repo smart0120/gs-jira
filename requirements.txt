@@ -1,1 +1,3 @@
 gspread==3.6.0
+jira==2.0.0
+python-dotenv
