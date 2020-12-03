@@ -38,3 +38,4 @@ python gs2jira.py
 
 ## Python JIRA library
 - https://jira.readthedocs.io/en/master/index.html
+- https://id.atlassian.com/manage-profile/security/api-tokens (create api-token)
