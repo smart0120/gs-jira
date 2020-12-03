@@ -9,6 +9,9 @@ import os, gspread
 from dotenv import load_dotenv
 from jira import JIRA
 from jira.exceptions import JIRAError
+from dateutil.parser import *
+from dateutil.relativedelta import *
+from datetime import *
 
 __author__ = "bursno22"
 __license__ = "MIT"
@@ -23,12 +26,25 @@ def index_from_col(col_name):
     """
     return ord(col_name.upper()) - 65
 
-def generate_comment(assignee, done_date, cid):
+def generate_comment(assignee, due_date, cid):
     """
     comment text for issue
     """
-    return "Hi {}, Just a quick reminder that it's almost \
-        {} to execute this IT Control Request.".format(assignee, done_date)
+    delta = relativedelta(parse(due_date).date(), date.today())
+    reminder_text = ""
+    if delta.months >= 0 and delta.days >= 14:
+        reminder_text = "Hello {}, this is a reminder that this IT Control will be due in 2 weeks"
+    if delta.months == 0 and delta.days < 14 and delta.days > 0:
+        reminder_text = "Hello {}, this is a reminder that this IT Control will be due in {} days"
+    elif delta.months == 0 and delta.days == 0:
+        reminder_text = "Hello {}, this is a reminder that this IT Control is currently due"
+    elif delta.months >= 0 and delta.days <= -18:
+        reminder_text = "Hello {}, this is a reminder that this IT Control is overdue and will be marked as a nonconformity in one week"
+    elif delta.months < 0 or delta.days <= -25:
+        reminder_text = "Hello {}, this is a reminder that this IT Control is overdue and will now be marked as a nonconformity"
+    if reminder_text:
+        return reminder_text.format(assignee, delta.days)
+    return ""
 
 def main():
     # Open Google Sheet
@@ -46,6 +62,7 @@ def main():
         # Read one row from google spread sheet
         record = sh.get_worksheet(0).row_values(row)
         cid = record[index_from_col(os.getenv('CID'))]
+        due_date = record[index_from_col(os.getenv('DUE_DATE'))]
         done_date = record[index_from_col(os.getenv('DONE_DATE'))]
         jira_issue_key = record[index_from_col(os.getenv('JIRA_ISSUE_KEY'))]
         ticket_status = record[index_from_col(os.getenv('TICKET_STATUS'))]
@@ -55,7 +72,7 @@ def main():
         if (ticket_status and ticket_status.lower() == 'open'):
             try:
                 issue = auth_jira.issue(jira_issue_key)
-                comment = auth_jira.add_comment(jira_issue_key, generate_comment(assignee, done_date, cid))
+                comment = auth_jira.add_comment(jira_issue_key, generate_comment(assignee, due_date, cid))
                 print (''.join(["#", jira_issue_key, " - Added Comment"]))
             except JIRAError:
                 print (''.join(["#", jira_issue_key, " - ", \
