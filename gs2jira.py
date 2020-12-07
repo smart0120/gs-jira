@@ -26,24 +26,52 @@ def index_from_col(col_name):
     """
     return ord(col_name.upper()) - 65
 
-def generate_comment(assignee, due_date, cid):
+def generate_comment(assignee, assignee_id, due_date, cid):
     """
     comment text for issue
     """
     delta = relativedelta(parse(due_date).date(), date.today())
     reminder_text = ""
     if delta.months >= 0 and delta.days >= 14:
-        reminder_text = "Hello {}, this is a reminder that this IT Control will be due in 2 weeks"
+        reminder_text = ", this is a reminder that this IT Control will be due in 2 weeks"
     if delta.months == 0 and delta.days < 14 and delta.days > 0:
-        reminder_text = "Hello {}, this is a reminder that this IT Control will be due in {} days"
+        reminder_text = ", this is a reminder that this IT Control will be due in {} days"
     elif delta.months == 0 and delta.days == 0:
-        reminder_text = "Hello {}, this is a reminder that this IT Control is currently due"
+        reminder_text = ", this is a reminder that this IT Control is currently due"
     elif delta.months >= 0 and delta.days <= -18:
-        reminder_text = "Hello {}, this is a reminder that this IT Control is overdue and will be marked as a nonconformity in one week"
+        reminder_text = ", this is a reminder that this IT Control is overdue and will be marked as a nonconformity in one week"
     elif delta.months < 0 or delta.days <= -25:
-        reminder_text = "Hello {}, this is a reminder that this IT Control is overdue and will now be marked as a nonconformity"
+        reminder_text = ", this is a reminder that this IT Control is overdue and will now be marked as a nonconformity"
     if reminder_text:
-        return reminder_text.format(assignee, delta.days)
+        template = {
+            "type": "doc",
+            "version": 1,
+            "content": [{
+                "type": "paragraph",
+                "content": [
+                    {
+                        "text": "Hello ",
+                        "type": "text"
+                    },
+                    {
+                        "type": "mention",
+                        "attrs": {
+                            "id": "",
+                            "text": "",
+                            "userType": "DEFAULT"
+                        }
+                    },
+                    {
+                        "text": "",
+                        "type": "text"
+                    }
+                ]
+            }]
+        }
+        template["content"][0]["content"][1]["attrs"]["id"] = assignee_id
+        template["content"][0]["content"][1]["attrs"]["text"] = "@%s" % assignee
+        template["content"][0]["content"][2]["text"] = reminder_text.format(delta.days)
+        return template
     return ""
 
 def main():
@@ -52,7 +80,7 @@ def main():
     sh = gc.open(os.getenv('SHEET_NAME'))
 
     # Open JIRA
-    auth_jira = JIRA(options={'server': os.getenv('JIRA_SERVER_URL')}, 
+    auth_jira = JIRA(options={'server': os.getenv('JIRA_SERVER_URL'), 'rest_api_version': 3}, 
         basic_auth=(os.getenv('JIRA_USERNAME'), os.getenv('JIRA_OAUTH_TOKEN')))
 
     # Loop each row of Google sheet
@@ -68,15 +96,22 @@ def main():
         ticket_status = record[index_from_col(os.getenv('TICKET_STATUS'))]
         assignee = record[index_from_col(os.getenv('ASSIGNEE'))]
 
+        # get JIRA User ID from 2nd sheet
+        assignee_id = None
+        try:
+            assignee_detail = sh.get_worksheet(1).find(assignee)
+            assignee_id = sh.get_worksheet(1).cell(assignee_detail.row, index_from_col(os.getenv('ASSIGNEE_ID'))+1).value
+        except:
+            pass
+
         # check if ticket status is 'Open'
-        if (ticket_status and ticket_status.lower() == 'open'):
+        if (assignee_id and ticket_status and ticket_status.lower() == 'open'):
             try:
                 issue = auth_jira.issue(jira_issue_key)
-                comment = auth_jira.add_comment(jira_issue_key, generate_comment(assignee, due_date, cid))
+                comment = auth_jira.add_comment(jira_issue_key, generate_comment(assignee, assignee_id, due_date, cid))
                 print (''.join(["#", jira_issue_key, " - Added Comment"]))
-            except JIRAError:
-                print (''.join(["#", jira_issue_key, " - ", \
-                    "Issue doesn't exist or you don't have permission to use it"]))
+            except JIRAError as err:
+                print (str(err))
 
 if __name__ == '__main__':
     main()
