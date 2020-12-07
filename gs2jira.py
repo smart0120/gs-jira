@@ -26,16 +26,25 @@ def index_from_col(col_name):
     """
     return ord(col_name.upper()) - 65
 
+def workdays(start, end, excluded=(6, 7)):
+    """
+    calcuate count of week days. (Mon to Fri)
+    """
+    days = 0
+    while start <= end:
+        if start.isoweekday() not in excluded:
+            days += 1
+        start += timedelta(days=1)
+    return days
+
 def generate_comment(assignee, assignee_id, due_date, cid):
     """
     comment text for issue
     """
     delta = relativedelta(parse(due_date).date(), date.today())
     reminder_text = ""
-    if delta.months >= 0 and delta.days >= 14:
-        reminder_text = ", this is a reminder that this IT Control will be due in 2 weeks"
-    if delta.months == 0 and delta.days < 14 and delta.days > 0:
-        reminder_text = ", this is a reminder that this IT Control will be due in {} days"
+    if delta.months == 0 and delta.days > 0:
+        reminder_text = ", this is a reminder that this IT Control will be due in {} working days"
     elif delta.months == 0 and delta.days == 0:
         reminder_text = ", this is a reminder that this IT Control is currently due"
     elif delta.months >= 0 and delta.days <= -18:
@@ -70,7 +79,7 @@ def generate_comment(assignee, assignee_id, due_date, cid):
         }
         template["content"][0]["content"][1]["attrs"]["id"] = assignee_id
         template["content"][0]["content"][1]["attrs"]["text"] = "@%s" % assignee
-        template["content"][0]["content"][2]["text"] = reminder_text.format(delta.days)
+        template["content"][0]["content"][2]["text"] = reminder_text.format(workdays(date.today(), parse(due_date).date()))
         return template
     return ""
 
