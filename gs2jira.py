@@ -43,7 +43,10 @@ def generate_comment(assignee, assignee_id, due_date, cid, risk_link, delta):
     """
     reminder_text = ""
     risk_flag = False
-    if delta.months == 0 and delta.days == 0:
+    if delta.months == 0 and delta.days > 0:
+        days = delta.days
+        reminder_text = f", this is a gentle reminder that this IT Control will be due in {days} business working days"
+    elif delta.months == 0 and delta.days == 0:
         reminder_text = "I know you have a lot on your plate right now. This is just a gentle reminder that this IT Control Review Request is due today. Process change update: if it’s not completed in a week then it will be escalated to the C-level, and if it is not completed in two weeks a risk will need to be created for the ITSC Risk Review."
     elif delta.months == 0 and delta.days in range(-13, -6):
         reminder_text = "This is just a gentle reminder that this IT Control Review Request was due a week ago. Since it has not completed, it will now be escalated to the respective C-level. If it is not completed in one more week a risk will need to be created for the ITSC Risk Review."
@@ -80,7 +83,7 @@ def generate_comment(assignee, assignee_id, due_date, cid, risk_link, delta):
     template["content"][0]["content"][1]["attrs"]["id"] = assignee_id
     template["content"][0]["content"][1]["attrs"]["text"] = "@%s" % assignee
     template["content"][0]["content"][2]["text"] = reminder_text
-    if risk_flag:
+    if risk_flag and risk_link:
         template["content"][0]["content"].append({
             "type": "text",
             "text": "Link to Risk",
@@ -120,8 +123,11 @@ def main():
         jira_issue_key = record[index_from_col(os.getenv('JIRA_ISSUE_KEY'))]
         ticket_status = record[index_from_col(os.getenv('TICKET_STATUS'))]
         assignee = record[index_from_col(os.getenv('ASSIGNEE'))]
-        risk_link_id = record[index_from_col(os.getenv('ITSC_RISK'))]
-        risk_link = ''.join([os.getenv('RISK_ATTR'), risk_link_id])
+        try:
+            risk_link_id = record[index_from_col(os.getenv('ITSC_RISK'))]
+            risk_link = ''.join([os.getenv('RISK_ATTR'), risk_link_id])
+        except:
+            risk_link = ''
 
         # get JIRA User ID from 2nd sheet
         assignee_id = None
