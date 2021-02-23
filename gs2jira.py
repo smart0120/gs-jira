@@ -137,8 +137,8 @@ def main():
             assignee_id = sh.get_worksheet(secondary_sheet).cell(assignee_detail.row, index_from_col(os.getenv('ASSIGNEE_ID'))+1).value
         except:
             pass
-        # check if ticket status is 'Open'
-        if (assignee_id and ticket_status and ticket_status.lower() == 'open'):
+        # check if ticket status is 'Open', 'In Review', 'To do', 'Open nonconformity(s) and si' or 'Open nonconformity(s)'
+        if (assignee_id and ticket_status and ticket_status.lower() in ['open', 'in review', 'to do', 'open nonconformity(s) and si', 'open nonconformity(s)']):
             try:
                 auth_jira.issue(jira_issue_key)
                 delta = relativedelta(parse(due_date, dayfirst=True).date(), date.today())
