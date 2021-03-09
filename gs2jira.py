@@ -5,7 +5,7 @@
 Script for converting google sheet rows to Jira tickets
 """
 
-import os, gspread
+import os, gspread, time
 from dotenv import load_dotenv
 from jira import JIRA
 from jira.exceptions import JIRAError
@@ -114,6 +114,10 @@ def main():
     row_range = [int(val) for val in os.getenv('DATA_RANGE').split(':')]
 
     for row in range(row_range[0], row_range[1]+1):
+        # Google spread has limit of 100 read request per 100 seconds, 
+        # So we put some 2 seconds sleep before every read to avoid quot exceed exception
+        time.sleep(2)
+
         # Read one row from google spread sheet
         primary_sheet = int(os.getenv('PRIMARY_SHEET')) #performance report sheet
         record = sh.get_worksheet(primary_sheet).row_values(row)
