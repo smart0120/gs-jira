@@ -45,7 +45,7 @@ def generate_comment(assignee, assignee_id, due_date, cid, risk_link, delta):
     risk_flag = False
     if delta.months == 0 and delta.days > 0:
         days = delta.days
-        reminder_text = f", this is a gentle reminder that this IT Control will be due in {days} business working days"
+        reminder_text = f", this is a gentle reminder that this IT Control will be due in {days} days"
     elif delta.months == 0 and delta.days == 0:
         reminder_text = "I know you have a lot on your plate right now. This is just a gentle reminder that this IT Control Review Request is due today. Process change update: if it’s not completed in a week then it will be escalated to the C-level, and if it is not completed in two weeks a risk will need to be created for the ITSC Risk Review."
     elif delta.months == 0 and delta.days in range(-13, -6):
