@@ -37,7 +37,7 @@ def workdays(start, end, excluded=(6, 7)):
         start += timedelta(days=1)
     return days
 
-def generate_comment(assignee, assignee_id, due_date, cid, risk_link, delta):
+def generate_comment(assignee, assignee_id, due_date, cid, delta):
     """
     comment text for issue
     """
@@ -50,9 +50,6 @@ def generate_comment(assignee, assignee_id, due_date, cid, risk_link, delta):
         reminder_text = "I know you have a lot on your plate right now. This is just a gentle reminder that this IT Control Review Request is due today. Process change update: if it’s not completed in a week then it will be escalated to the C-level, and if it is not completed in two weeks a risk will need to be created for the ITSC Risk Review."
     elif delta.months == 0 and delta.days in range(-13, -6):
         reminder_text = "This is just a gentle reminder that this IT Control Review Request was due a week ago. Since it has not completed, it will now be escalated to the respective C-level. If it is not completed in one more week a risk will need to be created for the ITSC Risk Review."
-    elif delta.months < 0 or delta.days <= -14:
-        risk_flag = True
-        reminder_text = "This is just a gentle reminder that this IT Control Review Request was due two weeks ago. Since it has not completed, it has already been escalated to the respective C-level. A risk must be created for the ITSC Risk Review. "
     else:
         return reminder_text
     template = {
@@ -83,78 +80,253 @@ def generate_comment(assignee, assignee_id, due_date, cid, risk_link, delta):
     template["content"][0]["content"][1]["attrs"]["id"] = assignee_id
     template["content"][0]["content"][1]["attrs"]["text"] = "@%s" % assignee
     template["content"][0]["content"][2]["text"] = reminder_text
-    if risk_flag and risk_link:
-        template["content"][0]["content"].append({
-            "type": "text",
-            "text": "Link to Risk",
-            "marks": [
-                {
-                    "type": "link",
-                    "attrs": {
-                        "href": risk_link,
-                        "title": "Atlassian"
-                    }
-                }
-            ]
-        })
     return template
 
 def main():
     # Open Google Sheet
     gc = gspread.oauth()
     sh = gc.open(os.getenv('SHEET_NAME'))
+    primary_worksheet = sh.get_worksheet(int(os.getenv('PRIMARY_SHEET')))
+    secondary_worksheet = sh.get_worksheet(int(os.getenv('SECONDARY_SHEET')))
+    jira_server_url = os.getenv('JIRA_SERVER_URL')
 
     # Open JIRA
     auth_jira = JIRA(
-        options={'server': os.getenv('JIRA_SERVER_URL'), 'rest_api_version': 3}, 
+        options={'server': jira_server_url, 'rest_api_version': 3}, 
         basic_auth=(os.getenv('JIRA_USERNAME'), os.getenv('JIRA_OAUTH_TOKEN'))
     )
 
     # Loop each row of Google sheet
     row_range = [int(val) for val in os.getenv('DATA_RANGE').split(':')]
-
+    
     for row in range(row_range[0], row_range[1]+1):
         # Google spread has limit of 100 read request per 100 seconds, 
         # So we put some 2 seconds sleep before every read to avoid quot exceed exception
         time.sleep(2)
 
         # Read one row from google spread sheet
-        primary_sheet = int(os.getenv('PRIMARY_SHEET')) #performance report sheet
-        record = sh.get_worksheet(primary_sheet).row_values(row)
+        record = primary_worksheet.row_values(row)
         cid = record[index_from_col(os.getenv('CID'))]
         due_date = record[index_from_col(os.getenv('DUE_DATE'))]
         done_date = record[index_from_col(os.getenv('DONE_DATE'))]
         jira_issue_key = record[index_from_col(os.getenv('JIRA_ISSUE_KEY'))]
         ticket_status = record[index_from_col(os.getenv('TICKET_STATUS'))]
         assignee = record[index_from_col(os.getenv('ASSIGNEE'))]
-        try:
-            risk_link_id = record[index_from_col(os.getenv('ITSC_RISK'))]
-            risk_link = ''.join([os.getenv('RISK_ATTR'), risk_link_id])
-        except:
-            risk_link = ''
 
         # get JIRA User ID from 2nd sheet
         assignee_id = None
         try:
-            secondary_sheet = int(os.getenv('SECONDARY_SHEET'))
-            assignee_detail = sh.get_worksheet(secondary_sheet).find(assignee)
-            assignee_id = sh.get_worksheet(secondary_sheet).cell(assignee_detail.row, index_from_col(os.getenv('ASSIGNEE_ID'))+1).value
+            assignee_detail = secondary_worksheet.find(assignee)
+            assignee_id = secondary_worksheet.cell(assignee_detail.row, index_from_col(os.getenv('ASSIGNEE_ID'))+1).value
         except:
             pass
         # check if ticket status is 'Open', 'In Review', 'To do', 'Open nonconformity(s) and si' or 'Open nonconformity(s)'
         if (assignee_id and ticket_status and ticket_status.lower() in ['open', 'in review', 'to do', 'open nonconformity(s) and si', 'open nonconformity(s)']):
             try:
-                auth_jira.issue(jira_issue_key)
                 delta = relativedelta(parse(due_date, dayfirst=True).date(), date.today())
-                comment_body = generate_comment(assignee, assignee_id, due_date, cid, risk_link, delta)
-                if comment_body:
-                    auth_jira.add_comment(jira_issue_key, comment_body)
-                    print(''.join(["#", jira_issue_key, " - Added Comment"]))
+                if delta.months < 0 or delta.days <= -14:
+                    issue_url = jira_server_url + 'browse/' + jira_issue_key
+                    risk_policy_url = os.getenv('JIRA_RISK_POLICY_URL')
+                    template = {
+                        "type": "doc",
+                        "version": 1,
+                        "content": [{
+                            "type": "paragraph",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Risk Description: ",
+                                    "marks": [
+                                        {
+                                            "type": "strong"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "[link]",
+                                    "marks": [
+                                        {
+                                            "type": "link",
+                                            "attrs": {
+                                                "href": issue_url
+                                            },
+                                        }
+                                    ]
+                                },
+                                {
+                                    "text": " is not yet completed. What is the risk associated with not executing this IT Control?",
+                                    "type": "text"
+                                },
+                            ]
+                        },
+                        {
+                            "type": "paragraph",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Probability Rating: ",
+                                    "marks": [
+                                        {
+                                            "type": "strong"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "Unlikely through Frequent as described in the "
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "Operational Risk Management Policy",
+                                    "marks": [
+                                        {
+                                            "type": "link",
+                                            "attrs": {
+                                                "href": risk_policy_url
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "paragraph",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Probability Description: ",
+                                    "marks": [
+                                        {
+                                            "type": "strong"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "Explain why the Probability Rating is appropriate."
+                                }
+                            ]
+                        },
+                        {
+                            "type": "paragraph",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Severity Rating: ",
+                                    "marks": [
+                                        {
+                                            "type": "strong"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "None through Critical as described in the "
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "Operational Risk Management Policy",
+                                    "marks": [
+                                        {
+                                            "type": "link",
+                                            "attrs": {
+                                                "href": risk_policy_url
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "paragraph",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Severity Description: ",
+                                    "marks": [
+                                        {
+                                            "type": "strong"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "Explain why the Severity Rating is appropriate."
+                                }
+                            ]
+                        },
+                        {
+                            "type": "paragraph",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Overall Risk Rating: ",
+                                    "marks": [
+                                        {
+                                            "type": "strong"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "Low through Critical after classifying the Risk Severity and Risk Probability, the overall risk can be determined by using the Risk Classification Matrix in the "
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "Operational Risk Management Policy",
+                                    "marks": [
+                                        {
+                                            "type": "link",
+                                            "attrs": {
+                                                "href": risk_policy_url
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "paragraph",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Action Plan (or a link to an Action Plan Jira ticket): ",
+                                    "marks": [
+                                        {
+                                            "type": "strong"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "Describing 3-5 steps on how the IT Control will be partially executed until it can be fully implemented, and the timeline to do so. This will be checked on at least a monthly basis moving forward."
+                                }
+                            ]
+                        }]
+                    }
+                    issue_dict = {
+                        'project': 'TIC',
+                        'summary': 'ITSC Risk',
+                        'description': template,
+                        'issuetype': {'name': os.getenv('JIRA_RISK_ISSUE_TYPE')},
+                    }
+                    new_issue_key = str(auth_jira.create_issue(fields=issue_dict))
+                    new_issue_url = jira_server_url + 'browse/' + new_issue_key
+                    primary_worksheet.update_cell(row, index_from_col(os.getenv('ITSC_RISK'))+1, f'=HYPERLINK("{new_issue_url}","{new_issue_key}")')
+                    primary_worksheet.update_cell(row, index_from_col(os.getenv('ITSC_RISK_STATUS'))+1, os.getenv('ITSC_RIST_STATUS_TYPE'))
+                    print ('Create a new risk issue in jira - ' + new_issue_key)
                 else:
-                    if delta.days in range(-6, 0) and delta.months == 0:
-                        print('IT Control Review Request was few days ago')
+                    auth_jira.issue(jira_issue_key)
+                    comment_body = generate_comment(assignee, assignee_id, due_date, cid, delta)
+                    if comment_body:
+                        auth_jira.add_comment(jira_issue_key, comment_body)
+                        print(''.join(["#", jira_issue_key, " - Added Comment"]))
                     else:
-                        print('Have some time before IT Control Review Request')
+                        if delta.days in range(-6, 0) and delta.months == 0:
+                            print('IT Control Review Request was few days ago')
+                        else:
+                            print('Have some time before IT Control Review Request')
             except JIRAError as err:
                 print (str(err))
 
