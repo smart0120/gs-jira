@@ -170,7 +170,7 @@ def main():
         except:
             pass
 
-        # check if ticket status is 'Open', 'In Review', 'To do', 'Open nonconformity(s) and si' or 'Open nonconformity(s)'
+        # check if ticket status is 'In Review'
         if (assignee_id and ticket_status and ticket_status.lower() == 'in review'):
             content = reviews_template.copy()
             content.append({
@@ -191,6 +191,7 @@ def main():
             }
             auth_jira.add_comment(jira_issue_key, comment_body)
             print(''.join(["#", jira_issue_key, " - Added Comment"]))
+        # check if ticket status is 'Open', 'In Review', 'To do', 'Open nonconformity(s) and si' or 'Open nonconformity(s)'
         elif (assignee_id and ticket_status and ticket_status.lower() in ['open', 'to do', 'open nonconformity(s) and si', 'open nonconformity(s)']):
             try:
                 delta = relativedelta(parse(due_date, dayfirst=True).date(), date.today())
@@ -376,7 +377,7 @@ def main():
                         }]
                     }
                     issue_dict = {
-                        'project': 'TIC',
+                        'project': os.getenv('JIRA_PROJECT_KEY'),
                         'summary': f'IT Controls {date.today().year} - Risk Log',
                         'description': template,
                         'issuetype': {'name': os.getenv('JIRA_RISK_ISSUE_TYPE')},
@@ -385,7 +386,7 @@ def main():
                     new_issue_key = str(auth_jira.create_issue(fields=issue_dict))
                     new_issue_url = jira_server_url + 'browse/' + new_issue_key
                     primary_worksheet.update_cell(row, index_from_col(os.getenv('ITSC_RISK'))+1, f'=HYPERLINK("{new_issue_url}","{new_issue_key}")')
-                    primary_worksheet.update_cell(row, index_from_col(os.getenv('ITSC_RISK_STATUS'))+1, os.getenv('ITSC_RIST_STATUS_TYPE'))
+                    primary_worksheet.update_cell(row, index_from_col(os.getenv('ITSC_RISK_STATUS'))+1, os.getenv('ITSC_RISK_STATUS_TYPE'))
                     print ('Create a new risk issue in jira - ' + new_issue_key)
                 else:
                     auth_jira.issue(jira_issue_key)
