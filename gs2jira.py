@@ -88,7 +88,56 @@ def main():
     sh = gc.open(os.getenv('SHEET_NAME'))
     primary_worksheet = sh.get_worksheet(int(os.getenv('PRIMARY_SHEET')))
     secondary_worksheet = sh.get_worksheet(int(os.getenv('SECONDARY_SHEET')))
+    in_review_worksheet = sh.get_worksheet(int(os.getenv('IN_REVIEW_SHEET')))
     jira_server_url = os.getenv('JIRA_SERVER_URL')
+
+    reviews_template = [
+        {
+            "type": "text",
+            "text": "Hi "
+        }
+    ]
+    review_data_list = in_review_worksheet.get_all_values()
+    review_assignee_name_idx = index_from_col(os.getenv('IN_REVIEW_ASSIGNEE_NAME'))
+    review_assignee_id_idx = index_from_col(os.getenv('IN_REVIEW_ASSIGNEE_ID'))
+    review_assignee_status_idx = index_from_col(os.getenv('IN_REVIEW_ASSIGNEE_STATUS'))
+    review_list_len = len(review_data_list)
+    for row in range(1, review_list_len):
+        assignee_name = review_data_list[row][review_assignee_name_idx]
+        assignee_id = review_data_list[row][review_assignee_id_idx]
+        assignee_status = review_data_list[row][review_assignee_status_idx]
+
+        if assignee_status != 'enabled':
+            pass
+
+        assignee = {
+            "type": "mention",
+            "attrs": {
+                "id": assignee_id,
+                "text": "@%s" % assignee_name,
+                "userType": "DEFAULT"
+            }
+        }
+        if row != 1 and row == review_list_len - 1:
+            reviews_template.append({
+                "type": "text",
+                "text": " and "
+            })
+        elif row != 1:
+            reviews_template.append({
+                "type": "text",
+                "text": ", "
+            })
+        reviews_template.append(assignee)
+        if row == review_list_len - 1:
+            reviews_template.append({
+                "type": "text",
+                "text": ","
+            })
+    reviews_template.append({
+        "type": "text",
+        "text": " When you have a moment please perform the quality assurance review. Thank you "
+    })
 
     # Open JIRA
     auth_jira = JIRA(
@@ -120,8 +169,29 @@ def main():
             assignee_id = secondary_worksheet.cell(assignee_detail.row, index_from_col(os.getenv('ASSIGNEE_ID'))+1).value
         except:
             pass
+
         # check if ticket status is 'Open', 'In Review', 'To do', 'Open nonconformity(s) and si' or 'Open nonconformity(s)'
-        if (assignee_id and ticket_status and ticket_status.lower() in ['open', 'in review', 'to do', 'open nonconformity(s) and si', 'open nonconformity(s)']):
+        if (assignee_id and ticket_status and ticket_status.lower() == 'in review'):
+            content = reviews_template.copy()
+            content.append({
+                "type": "mention",
+                "attrs": {
+                    "id": assignee_id,
+                    "text": "@%s" % assignee,
+                    "userType": "DEFAULT"
+                }
+            })
+            comment_body = {
+                "type": "doc",
+                "version": 1,
+                "content": [{
+                    "type": "paragraph",
+                    "content": content
+                }]
+            }
+            auth_jira.add_comment(jira_issue_key, comment_body)
+            print(''.join(["#", jira_issue_key, " - Added Comment"]))
+        elif (assignee_id and ticket_status and ticket_status.lower() in ['open', 'to do', 'open nonconformity(s) and si', 'open nonconformity(s)']):
             try:
                 delta = relativedelta(parse(due_date, dayfirst=True).date(), date.today())
                 if delta.months < 0 or delta.days <= -14:
@@ -310,6 +380,7 @@ def main():
                         'summary': 'ITSC Risk',
                         'description': template,
                         'issuetype': {'name': os.getenv('JIRA_RISK_ISSUE_TYPE')},
+                        'assignee': {'name': assignee}
                     }
                     new_issue_key = str(auth_jira.create_issue(fields=issue_dict))
                     new_issue_url = jira_server_url + 'browse/' + new_issue_key
