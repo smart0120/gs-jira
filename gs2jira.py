@@ -214,7 +214,7 @@ def main():
                                 },
                                 {
                                     "type": "text",
-                                    "text": "[link]",
+                                    "text": jira_issue_key,
                                     "marks": [
                                         {
                                             "type": "link",
@@ -377,7 +377,7 @@ def main():
                     }
                     issue_dict = {
                         'project': 'TIC',
-                        'summary': 'ITSC Risk',
+                        'summary': f'IT Controls {date.today().year} - Risk Log',
                         'description': template,
                         'issuetype': {'name': os.getenv('JIRA_RISK_ISSUE_TYPE')},
                         'assignee': {'name': assignee}
