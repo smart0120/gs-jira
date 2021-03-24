@@ -6,6 +6,7 @@ Script for converting google sheet rows to Jira tickets
 """
 
 import os, gspread, time
+from gspread.exceptions import GSpreadException
 from dotenv import load_dotenv
 from jira import JIRA
 from jira.exceptions import JIRAError
@@ -167,11 +168,18 @@ def main():
         try:
             assignee_detail = secondary_worksheet.find(assignee)
             assignee_id = secondary_worksheet.cell(assignee_detail.row, index_from_col(os.getenv('ASSIGNEE_ID'))+1).value
-        except:
-            pass
+        except GSpreadException as err:
+            print (str(err))
 
+        print (f'row: {row}, due_date: {due_date}, assignee: {assignee}, assignee_id: {assignee_id}, ticket_status: {ticket_status}')
+
+        # Check assignee id
+        if not assignee_id:
+            print ('assignee_id is empty value')
+        elif not ticket_status:
+            print ('ticket_status is empty value')
         # check if ticket status is 'In Review'
-        if (assignee_id and ticket_status and ticket_status.lower() == 'in review'):
+        elif (ticket_status.lower() == 'in review'):
             content = reviews_template.copy()
             content.append({
                 "type": "mention",
@@ -190,9 +198,9 @@ def main():
                 }]
             }
             auth_jira.add_comment(jira_issue_key, comment_body)
-            print(''.join(["#", jira_issue_key, " - Added Comment"]))
+            print (''.join(["#", jira_issue_key, " - Added Comment"]))
         # check if ticket status is 'Open', 'In Review', 'To do', 'Open nonconformity(s) and si' or 'Open nonconformity(s)'
-        elif (assignee_id and ticket_status and ticket_status.lower() in ['open', 'to do', 'open nonconformity(s) and si', 'open nonconformity(s)']):
+        elif (ticket_status.lower() in ['open', 'to do', 'open nonconformity(s) and si', 'open nonconformity(s)']):
             try:
                 delta = relativedelta(parse(due_date, dayfirst=True).date(), date.today())
                 if delta.months < 0 or delta.days <= -14:
@@ -393,14 +401,16 @@ def main():
                     comment_body = generate_comment(assignee, assignee_id, due_date, cid, delta)
                     if comment_body:
                         auth_jira.add_comment(jira_issue_key, comment_body)
-                        print(''.join(["#", jira_issue_key, " - Added Comment"]))
+                        print (''.join(["#", jira_issue_key, " - Added Comment"]))
                     else:
                         if delta.days in range(-6, 0) and delta.months == 0:
-                            print('IT Control Review Request was few days ago')
+                            print ('IT Control Review Request was few days ago')
                         else:
-                            print('Have some time before IT Control Review Request')
+                            print ('Have some time before IT Control Review Request')
             except JIRAError as err:
                 print (str(err))
+        else:
+            print (f"We couldn't process it. Row - {row}, Ticket status - {ticket_status}")
 
 if __name__ == '__main__':
     main()
