@@ -169,15 +169,15 @@ def main():
             assignee_detail = secondary_worksheet.find(assignee)
             assignee_id = secondary_worksheet.cell(assignee_detail.row, index_from_col(os.getenv('ASSIGNEE_ID'))+1).value
         except GSpreadException as err:
-            print (str(err))
+            print(str(err))
 
-        print (f'row: {row}, due_date: {due_date}, assignee: {assignee}, assignee_id: {assignee_id}, ticket_status: {ticket_status}')
+        print(f'row: {row}, due_date: {due_date}, assignee: {assignee}, assignee_id: {assignee_id}, ticket_status: {ticket_status}')
 
         # Check assignee id
         if not assignee_id:
-            print ('assignee_id is empty value')
+            print('assignee_id is empty value')
         elif not ticket_status:
-            print ('ticket_status is empty value')
+            print('ticket_status is empty value')
         # check if ticket status is 'In Review'
         elif (ticket_status.lower() == 'in review'):
             content = reviews_template.copy()
@@ -198,7 +198,7 @@ def main():
                 }]
             }
             auth_jira.add_comment(jira_issue_key, comment_body)
-            print (''.join(["#", jira_issue_key, " - Added Comment"]))
+            print(''.join(["#", jira_issue_key, " - Added Comment"]))
         # check if ticket status is 'Open', 'In Review', 'To do', 'Open nonconformity(s) and si' or 'Open nonconformity(s)'
         elif (ticket_status.lower() in ['open', 'to do', 'open nonconformity(s) and si', 'open nonconformity(s)']):
             try:
@@ -395,22 +395,22 @@ def main():
                     new_issue_url = jira_server_url + 'browse/' + new_issue_key
                     primary_worksheet.update_cell(row, index_from_col(os.getenv('ITSC_RISK'))+1, f'=HYPERLINK("{new_issue_url}","{new_issue_key}")')
                     primary_worksheet.update_cell(row, index_from_col(os.getenv('ITSC_RISK_STATUS'))+1, os.getenv('ITSC_RISK_STATUS_TYPE'))
-                    print ('Create a new risk issue in jira - ' + new_issue_key)
+                    print('Create a new risk issue in jira - ' + new_issue_key)
                 else:
                     auth_jira.issue(jira_issue_key)
                     comment_body = generate_comment(assignee, assignee_id, due_date, cid, delta)
                     if comment_body:
                         auth_jira.add_comment(jira_issue_key, comment_body)
-                        print (''.join(["#", jira_issue_key, " - Added Comment"]))
+                        print(''.join(["#", jira_issue_key, " - Added Comment"]))
                     else:
                         if delta.days in range(-6, 0) and delta.months == 0:
-                            print ('IT Control Review Request was few days ago')
+                            print('IT Control Review Request was few days ago')
                         else:
-                            print ('Have some time before IT Control Review Request')
+                            print('Have some time before IT Control Review Request')
             except JIRAError as err:
-                print (str(err))
+                print(str(err))
         else:
-            print (f"We couldn't process it. Row - {row}, Ticket status - {ticket_status}")
+            print(f"We couldn't process it. Row - {row}, Ticket status - {ticket_status}")
 
 if __name__ == '__main__':
     main()
