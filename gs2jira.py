@@ -159,6 +159,7 @@ def main():
         # Read one row from google spread sheet
         record = primary_worksheet.row_values(row)
         cid = record[index_from_col(os.getenv('CID'))]
+        title = record[index_from_col(os.getenv('TITLE'))]
         due_date = record[index_from_col(os.getenv('DUE_DATE'))]
         done_date = record[index_from_col(os.getenv('DONE_DATE'))]
         jira_issue_key = record[index_from_col(os.getenv('JIRA_ISSUE_KEY'))]
@@ -386,12 +387,12 @@ def main():
                             ]
                         }]
                     }
+                    due_date = parse(due_date, dayfirst=True).date()
                     issue_dict = {
                         'project': os.getenv('JIRA_PROJECT_KEY'),
-                        'summary': f'RISK: {jira_issue_key}',
+                        'summary': f'RISK: {cid} - {title} - {due_date.strftime("%b%d")}',
                         'description': template,
-                        'issuetype': {'name': os.getenv('JIRA_RISK_ISSUE_TYPE')},
-                        'assignee': {'name': assignee}
+                        'issuetype': {'name': os.getenv('JIRA_RISK_ISSUE_TYPE')}
                     }
                     new_issue_key = str(auth_jira.create_issue(fields=issue_dict))
                     new_issue_url = jira_server_url + 'browse/' + new_issue_key
