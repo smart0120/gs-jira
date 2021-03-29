@@ -142,12 +142,14 @@ def main():
 
     # Open JIRA
     auth_jira = JIRA(
-        options={'server': jira_server_url, 'rest_api_version': 3}, 
+        options={'server': jira_server_url, 'rest_api_version': 3},
         basic_auth=(os.getenv('JIRA_USERNAME'), os.getenv('JIRA_OAUTH_TOKEN'))
     )
 
     # Loop each row of Google sheet
     row_range = [int(val) for val in os.getenv('DATA_RANGE').split(':')]
+
+    risk_issue_keys = []
     
     for row in range(row_range[0], row_range[1]+1):
         # Google spread has limit of 100 read request per 100 seconds, 
@@ -386,7 +388,7 @@ def main():
                     }
                     issue_dict = {
                         'project': os.getenv('JIRA_PROJECT_KEY'),
-                        'summary': f'IT Controls {date.today().year} - Risk Log',
+                        'summary': f'RISK: {jira_issue_key}',
                         'description': template,
                         'issuetype': {'name': os.getenv('JIRA_RISK_ISSUE_TYPE')},
                         'assignee': {'name': assignee}
@@ -395,6 +397,9 @@ def main():
                     new_issue_url = jira_server_url + 'browse/' + new_issue_key
                     primary_worksheet.update_cell(row, index_from_col(os.getenv('ITSC_RISK'))+1, f'=HYPERLINK("{new_issue_url}","{new_issue_key}")')
                     primary_worksheet.update_cell(row, index_from_col(os.getenv('ITSC_RISK_STATUS'))+1, os.getenv('ITSC_RISK_STATUS_TYPE'))
+
+                    risk_issue_keys.append(new_issue_key)
+
                     print('Create a new risk issue in jira - ' + new_issue_key)
                 else:
                     auth_jira.issue(jira_issue_key)
@@ -411,6 +416,17 @@ def main():
                 print(str(err))
         else:
             print(f"We couldn't process it. Row - {row}, Ticket status - {ticket_status}")
+    
+    try:
+        if len(risk_issue_keys):
+            jira_risk_log_key = os.getenv('JIRA_RISK_LOG_KEY')
+            issue = auth_jira.issue(jira_risk_log_key)
+            auth_jira.add_issues_to_epic(issue.id, risk_issue_keys)
+            print(f'Jira risk issues are added in {jira_risk_log_key}')
+        else:
+            print("There isn't any risk issue")
+    except JIRAError as err:
+        print(str(err))
 
 if __name__ == '__main__':
     main()
