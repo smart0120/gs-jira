@@ -38,7 +38,7 @@ def workdays(start, end, excluded=(6, 7)):
         start += timedelta(days=1)
     return days
 
-def generate_comment(assignee, assignee_id, due_date, cid, delta):
+def generate_comment(assignee, assignee_id, cid, delta, risk_link):
     """
     comment text for issue
     """
@@ -51,6 +51,9 @@ def generate_comment(assignee, assignee_id, due_date, cid, delta):
         reminder_text = "I know you have a lot on your plate right now. This is just a gentle reminder that this IT Control Review Request is due today. Process change update: if it’s not completed in a week then it will be escalated to the C-level, and if it is not completed in two weeks a risk will need to be created for the ITSC Risk Review."
     elif delta.months == 0 and delta.days in range(-13, -6):
         reminder_text = "This is just a gentle reminder that this IT Control Review Request was due a week ago. Since it has not completed, it will now be escalated to the respective C-level. If it is not completed in one more week a risk will need to be created for the ITSC Risk Review."
+    elif delta.months < 0 or delta.days <= -14:
+        risk_flag = True
+        reminder_text = "This is just a gentle reminder that this IT Control Review Request was due two weeks ago. Since it has not completed, it has already been escalated to the respective C-level. A risk must be created for the ITSC Risk Review. "
     else:
         return reminder_text
     template = {
@@ -81,6 +84,20 @@ def generate_comment(assignee, assignee_id, due_date, cid, delta):
     template["content"][0]["content"][1]["attrs"]["id"] = assignee_id
     template["content"][0]["content"][1]["attrs"]["text"] = "@%s" % assignee
     template["content"][0]["content"][2]["text"] = reminder_text
+    if risk_flag and risk_link:
+        template["content"][0]["content"].append({
+            "type": "text",
+            "text": "Link to Risk",
+            "marks": [
+                {
+                    "type": "link",
+                    "attrs": {
+                        "href": risk_link,
+                        "title": "Atlassian"
+                    }
+                }
+            ]
+        })
     return template
 
 def main():
@@ -206,6 +223,7 @@ def main():
         elif (ticket_status.lower() in ['open', 'to do', 'open nonconformity(s) and si', 'open nonconformity(s)']):
             try:
                 delta = relativedelta(parse(due_date, dayfirst=True).date(), date.today())
+                new_issue_url = None
                 if delta.months < 0 or delta.days <= -14:
                     issue_url = jira_server_url + 'browse/' + jira_issue_key
                     risk_policy_url = os.getenv('JIRA_RISK_POLICY_URL')
@@ -387,10 +405,10 @@ def main():
                             ]
                         }]
                     }
-                    due_date = parse(due_date, dayfirst=True).date()
+                    risk_date = parse(due_date, dayfirst=True).date()
                     issue_dict = {
                         'project': os.getenv('JIRA_PROJECT_KEY'),
-                        'summary': f'RISK: {cid} - {title} - {due_date.strftime("%b%d")}',
+                        'summary': f'Risk: {cid} - {title} - {risk_date.strftime("%b%d")}',
                         'description': template,
                         'issuetype': {'name': os.getenv('JIRA_RISK_ISSUE_TYPE')}
                     }
@@ -402,17 +420,17 @@ def main():
                     risk_issue_keys.append(new_issue_key)
 
                     print('Create a new risk issue in jira - ' + new_issue_key)
+                    
+                auth_jira.issue(jira_issue_key)
+                comment_body = generate_comment(assignee, assignee_id, cid, delta, new_issue_url)
+                if comment_body:
+                    auth_jira.add_comment(jira_issue_key, comment_body)
+                    print(''.join(["#", jira_issue_key, " - Added Comment"]))
                 else:
-                    auth_jira.issue(jira_issue_key)
-                    comment_body = generate_comment(assignee, assignee_id, due_date, cid, delta)
-                    if comment_body:
-                        auth_jira.add_comment(jira_issue_key, comment_body)
-                        print(''.join(["#", jira_issue_key, " - Added Comment"]))
+                    if delta.days in range(-6, 0) and delta.months == 0:
+                        print('IT Control Review Request was few days ago')
                     else:
-                        if delta.days in range(-6, 0) and delta.months == 0:
-                            print('IT Control Review Request was few days ago')
-                        else:
-                            print('Have some time before IT Control Review Request')
+                        print('Have some time before IT Control Review Request')
             except JIRAError as err:
                 print(str(err))
         else:
