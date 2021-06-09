@@ -408,7 +408,7 @@ def main():
                     risk_date = parse(due_date, dayfirst=True).date()
                     issue_dict = {
                         'project': os.getenv('JIRA_PROJECT_KEY'),
-                        'summary': f'Risk: {cid} - {title} - {risk_date.strftime("%b%d")}',
+                        'summary': f'Risk: {cid} - {title} - {risk_date.strftime("%b - %Y")}',
                         'description': template,
                         'issuetype': {'name': os.getenv('JIRA_RISK_ISSUE_TYPE')}
                     }
