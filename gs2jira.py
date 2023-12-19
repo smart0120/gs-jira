@@ -123,9 +123,8 @@ def main():
     for row in range(1, review_list_len):
         assignee_name = review_data_list[row][review_assignee_name_idx]
         assignee_id = review_data_list[row][review_assignee_id_idx]
-        assignee_status = review_data_list[row][review_assignee_status_idx]
 
-        if assignee_status != 'enabled':
+        if (assignee_status := review_data_list[row][review_assignee_status_idx]) != 'enabled':
             pass
 
         assignee = {
